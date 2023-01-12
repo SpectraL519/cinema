@@ -10,8 +10,12 @@ import pandas as pd
 
 class Credentials:
     def __init__(self, **kwargs):
-        self.username = kwargs.get("username", None)
-        self.password = kwargs.get("password", None) if self.username else None
+        user = kwargs.get("username", None)
+        pswd = kwargs.get("password", None)
+
+        if checkInput(user) and checkInput(pswd):
+            self.username = user
+            self.password = pswd
 
     
     def __str__(self):
@@ -28,21 +32,14 @@ class Credentials:
 
         return False
 
-
-    def checkInput(self, input: str) -> bool:
-        if not input or re.match(".*['\";, ]+.*", input):
-            return False
-
-        return True
-
     
     def set(self, username: str, password: str) -> bool:
-        if self.checkInput(username) and self.checkInput(password):
+        if checkInput(username) and checkInput(password):
             self.username = username
             self.password = password
             return True
 
-        print("Error: Invalid credentials")
+        print("Error: Invalid credentials\nTry again!")
         return False
 
 
@@ -63,11 +60,12 @@ class DBConnector:
         return object.__getattribute__(self, name)
 
 
-    def setParams(self, **kwargs):
-        self.credentials = kwargs.get("credentials", None)
-        self.host = kwargs.get("host", None)
-        self.port = kwargs.get("port", None)
-        self.database = kwargs.get("database", None)
+    def new(self, **kwargs):
+        # self.credentials = kwargs.get("credentials", None)
+        # self.host = kwargs.get("host", None)
+        # self.port = kwargs.get("port", None)
+        # self.database = kwargs.get("database", None)
+        return self.__class__(**kwargs)
 
     
     def open(self) -> bool:
@@ -87,65 +85,92 @@ class DBConnector:
             return False
 
 
-    def testSelect(self):
+    def getRole(self, credentials: Credentials) -> str:
         try:
             self.cursor.execute(
-                "SELECT * FROM Staff"
+                "SELECT role FROM Staff WHERE username = ? AND pswd = PASSWORD(?)",
+                (credentials.username, credentials.password)
             )
+
+            R = []
+            for (role,) in self.cursor.fetchall():
+                R.append(role)
+
+            if len(R) != 1:
+                return None
+
+            return R[0]
+
         except mariadb.Error as e:
             print(f"Error: Execute: {e}")
             return None
 
-        U, P, R = [], [], []
-        for (user, pswd, role) in self.cursor:
-            U.append(user)
-            P.append(pswd)
-            R.append(role)
-        
-        return pd.DataFrame({'user': U,
-                             'password': P,
-                             'role': R})
-
     
     def close(self):
         self.connection.close()
+        self.connection = None
 
 
 
 
 
 class CommandLine:
-    def __init__(self, **kwargs):
-        self.credentials = kwargs.get("credentials", None)
-        self.connector = kwargs.get("connector", None)
+    def __init__(self, connector: DBConnector):
+        self.connector = connector
+        self.help = """
+        Cinema application commands:
+            - exit : Exits the application
+        """
 
 
     def __getattribute__(self, name: str):
         return object.__getattribute__(self, name)
 
 
-    def EXIT_MESSAGE(self) -> str:
-        return "Bye!"
-
-
     def getCredentials(self) -> Credentials:
         c = Credentials()
         while True:
-            username = input("Username: ")
+            username = input("\nUsername: ")
+            if username == "exit":
+                closeApplication(self.connector)
+
             password = getpass("Password: ")
-            c.set(username, password)
-            if not c.isNull():
+            if c.set(username, password):
                 break
             
+        print()
         return c
 
 
-    def execCommand(self, connector: DBConnector):
+    def execCommand(self, connector: DBConnector) -> bool:
         command = input("cmd> ")
         args = re.split(" ", command)
 
         if args[0] == "help":
-            pass
+            print(self.help)
+            return False
             
         elif args[0] == "exit":
-            raise SystemExit
+            return True
+
+        else:
+            print("Error: Invalid commant - To get commands' overview type 'help'")
+            return False
+
+
+
+
+
+def checkInput(input: str) -> bool:
+    if not input or re.match(".*['\";, ]+.*", input):
+        return False
+
+    return True
+
+
+
+def closeApplication(connector: DBConnector):
+    if connector:
+        connector.close()
+    print("Bye!")
+    raise SystemExit
