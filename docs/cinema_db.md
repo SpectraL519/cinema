@@ -273,7 +273,13 @@ FLUSH PRIVILEGES;
 * Salesman
 
 ```
---TODO
+CREATE USER IF NOT EXISTS 'salesman'@'localhost';
+SET PASSWORD FOR 'salesman'@'localhost' = PASSWORD(<password>);
+GRANT SELECT ON cinema.Movies TO 'salesman'@'localhost';
+GRANT SELECT ON cinema.Schedule TO 'salesman'@'localhost';
+GRANT SELECT, INSERT ON cinema.Customers TO 'salesman'@'localhost';
+GRANT SELECT, INSERT ON cinema.Tickets TO 'salesman'@'localhost';
+FLUSH PRIVILEGES;
 ```
 
 <br />
@@ -281,5 +287,12 @@ FLUSH PRIVILEGES;
 * Manager
 
 ```
---TODO
+CREATE USER IF NOT EXISTS 'manager'@'localhost';
+SET PASSWORD FOR 'manager'@'localhost' = PASSWORD(<password>);
+GRANT SELECT, UPDATE, INSERT ON cinema.Staff ON 'manager'@'localhost';
+GRANT SELECT, UPDATE, INSERT ON cinema.Movies TO 'salesman'@'localhost';
+GRANT SELECT, UPDATE, INSERT ON cinema.Schedule TO 'salesman'@'localhost';
+GRANT SELECT, UPDATE, INSERT ON cinema.Customers TO 'salesman'@'localhost';
+GRANT SELECT, UPDATE, INSERT ON cinema.Tickets TO 'salesman'@'localhost';
+FLUSH PRIVILEGES;
 ```
