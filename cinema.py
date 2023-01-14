@@ -3,6 +3,15 @@ from copy import copy
 
 import cinema_utils as utils
 
+# TODO:
+# Salesman:
+# 1. Checking customers
+# 2. Checking repertoire
+# 3. Issuing tickets
+# Manager:
+# 1. Hiring and firing staff \/
+# 2. Updating / delete tickets
+
 
 
 
@@ -38,25 +47,22 @@ if __name__ == "__main__":
                                        host=config['host'],
                                        port=config['port'],
                                        database=config['database'])
-    connector = copy(init_connector)
 
     print("Connecting to the database...")
-    if not connector.open():
+    if not init_connector.open():
         print("Error: Database connection")
         raise SystemExit
 
     print("Success!")
 
+    init_cmd = utils.CommandLine(init_connector)
 
-
-    # Starting the application
-    cmd = utils.CommandLine(connector)
 
     while True:
-        role = connector.getRole(cmd.getCredentials())
+        role = init_connector.getRole(init_cmd.getCredentials())
         while not role:
             print("Error: Invalid credentials\nTry again!")
-            role = connector.getRole(cmd.getCredentials())
+            role = init_connector.getRole(init_cmd.getCredentials())
         
         db_credentials = utils.Credentials(username=role, 
                                            password=config['credentials'][role])
@@ -66,18 +72,24 @@ if __name__ == "__main__":
                                       host=config['host'],
                                       port=config['port'],
                                       database=config['database'])
+
+        # Opening the application                  
         if connector.open():
             print(f"Success: Logged in as {role}")
-        else:
-            connector = copy(init_connector)
-            connector.open()
-            continue
 
-        while True:
-            logOut = cmd.execCommand()
-            if logOut: 
-                connector = copy(init_connector)
-                connector.open()
-                break
+            # Starting the application
+            cmd = utils.CommandLine(connector)
+            while True:
+                logOut = cmd.execCommand()
+                if logOut: 
+                    connector = copy(init_connector)
+                    connector.open()
+                    break
+
+            connector.close()
+            connector = None
+
+        else:
+            print("Error: Database connection\nTry again!")
 
 
