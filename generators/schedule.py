@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 
 lengths = [146, 101, 100, 150, 150, 115, 135, 145, 125, 130, 193]
 movies = range(len(lengths))
-langs = range(1, 5)
+langs = range(1, 4)
 rooms = range(1, 12)
 
 with open("./docs/schedule.txt", 'w') as file:
@@ -23,7 +23,7 @@ with open("./docs/schedule.txt", 'w') as file:
 
             for lang in langs:
                 if plus == 59 and movie == movies[-1] and lang == langs[-1]:
-                    file.write(f"\t({(movie * 4) + lang}, {rooms[movie]}, '{current}', 0);")
+                    file.write(f"\t({(movie * len(langs)) + lang}, {rooms[movie]}, '{current}', 0);")
                 else:
-                    file.write(f"\t({(movie * 4) + lang}, {rooms[movie]}, '{current}', 0),\n")
+                    file.write(f"\t({(movie * len(langs)) + lang}, {rooms[movie]}, '{current}', 0),\n")
                     current = current + timedelta(minutes=delta)
