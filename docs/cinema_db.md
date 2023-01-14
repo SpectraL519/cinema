@@ -267,6 +267,13 @@ DELIMITER ;
 ```
 
 <br />
+
+TODO:
+
+* Deleting schedule records when deleting movies / rooms / languages
+* Deleting tickets when deleting schedule records
+
+<br />
 <br />
 <br />
 
