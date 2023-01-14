@@ -1,4 +1,5 @@
 # Imports
+import os
 from getpass import getpass
 import re
 import mariadb
@@ -18,10 +19,6 @@ class Credentials:
         if checkInput(user) and checkInput(pswd):
             self.username = user
             self.password = pswd
-
-    
-    def __str__(self):
-        return f"Username: {self.username}\nPassword: {self.password}"
 
 
     def __getattribute__(self, name: str):
@@ -48,6 +45,34 @@ class Credentials:
 
 
 
+class Ticket:
+    def __init__(self, **kwargs):
+        self.id = kwargs.get("id", None)
+        self.customer = kwargs.get("customer", None)
+        self.movie = kwargs.get("movie", None)
+        self.start_time = kwargs.get("start_time", None)
+        self.n_seats = kwargs.get("n_seats", None)
+        self.seat_price = kwargs.get("seat_price", None)
+
+
+    def __str__(self):
+        if not all([self.id, self.movie, self.start_time, self.n_seats, self.seat_price]):
+            return("Error: Invalid ticket")
+
+        ticket = []
+        ticket.append(f"Ticker nr: {self.id}")
+        ticket.append('\n\t'.join([f"{key}: {self.customer[key]}" for key in self.customer.keys()]))
+        ticket.append(f"Movie: {self.movie}")
+        ticket.append(f"Start time: {self.start_time}")
+        ticket.append(f"No. seats: {self.n_seats}")
+        ticket.append(f"Price: {self.n_seats * self.seat_price}")
+
+        return '\n\t'.join(ticket)
+
+
+
+
+
 class DBConnector:
     def __init__(self, **kwargs):
         self.credentials = kwargs.get("credentials", None)
@@ -59,8 +84,10 @@ class DBConnector:
         self.cursor = None
 
     
+
     def __getattribute__(self, name: str):
         return object.__getattribute__(self, name)
+
 
     
     def open(self) -> bool:
@@ -80,6 +107,7 @@ class DBConnector:
             return False
 
 
+
     def getRole(self, credentials: Credentials) -> str:
         try:
             self.cursor.execute(
@@ -87,18 +115,16 @@ class DBConnector:
                 (credentials.username, credentials.password)
             )
 
-            R = []
-            for (role,) in self.cursor.fetchall():
-                R.append(role)
-
-            if len(R) != 1:
+            role = self.cursor.fetchone()
+            self.cursor.fetchall()
+            if not role:
                 return None
-
-            return R[0]
+            return role[0]
 
         except mariadb.Error as e:
-            print(f"Error: EXECUTE: {e}")
+            print(f"Error: {e}")
             return None
+
 
 
     def manageStaff(self, action: str, **kwargs):
@@ -115,7 +141,7 @@ class DBConnector:
                 print(tabulate(staff, headers='keys', tablefmt='psql'))
 
             except mariadb.Error as e:
-                print(f"Error: EXECUTE: {e}")
+                print(f"Error: {e}")
                 return
 
         elif action == "hire":
@@ -133,7 +159,7 @@ class DBConnector:
                 self.manageStaff("show")
 
             except mariadb.Error as e:
-                print(f"Error: EXECUTE: {e}")
+                print(f"Error: {e}")
                 return 
 
         elif action == "fire":
@@ -148,14 +174,14 @@ class DBConnector:
                 self.manageStaff("show")
 
             except mariadb.Error as e:
-                print(f"Error: EXECUTE: {e}")
+                print(f"Error: {e}")
                 return
 
             pass
 
         else:
             print("Error: invalid value of 'action' - must be 'show', 'hire' or 'fire'")
-            return        
+
 
 
     def displayRepertoire(self, date: str):
@@ -175,27 +201,26 @@ class DBConnector:
             print(tabulate(schedule, headers='keys', tablefmt='psql'))
 
         except mariadb.Error as e:
-            print(f"Error: EXECUTE: {e}")
-            return None
+            print(f"Error: {e}")
+
 
 
     def displaySchedule(self, date: str):
         try:
             self.cursor.execute("""
-            SELECT m.id, m.title, l.name, l.type, s.start_time, s.s_taken, r.s_max 
+            SELECT s.id, m.id, m.title, l.name, l.type, s.start_time, s.s_taken, r.s_max 
                 FROM Schedule AS s 
                     JOIN Movies AS m ON s.movie_id = m.id
                     JOIN Languages AS l ON m.language_id = l.id
                     JOIN Rooms AS r ON s.room_id = r.id
                 WHERE DATE(s.start_time) = DATE(?)
-                ORDER BY m.title;
+                ORDER BY m.id;
             """, (date,))
 
-            schedule = pd.DataFrame(columns=['id', 'title', 'language', 'start_time', 'free_seats'])
-            for (id, title, l_name, l_type, start, s_taken, s_max) in self.cursor.fetchall():
-                row = pd.DataFrame({'id': id,
-                                    'title': title,
-                                    'language': f"{l_name} ({l_type})",
+            schedule = pd.DataFrame(columns=['id', 'movie', 'start_time', 'free_seats'])
+            for (s_id, m_id, title, l_name, l_type, start, s_taken, s_max) in self.cursor.fetchall():
+                row = pd.DataFrame({'id': s_id,
+                                    'movie': f"{m_id}: {title} ({l_name} - {l_type})",
                                     'start_time': start,
                                     'free_seats': s_max - s_taken}, index=[0])
                 schedule = pd.concat([schedule, row]).reset_index(drop=True)
@@ -203,8 +228,157 @@ class DBConnector:
             print(tabulate(schedule, headers='keys', tablefmt='psql'))
 
         except mariadb.Error as e:
-            print(f"Error: EXECUTE: {e}")
+            print(f"Error: {e}")
+
+
+
+    def getPrice(self, schedule_id: int) -> int:
+        try:
+            self.cursor.execute("""
+            SELECT r.ticket_price
+                FROM Schedule AS s JOIN Rooms AS r ON s.room_id = r.id
+                WHERE s.id = ?;
+            """, (schedule_id,))
+
+            (price,) = self.cursor.fetchone()
+            self.cursor.fetchall()
+            if not price:
+                return None
+            return price
+
+        except mariadb.Error as e:
+            print(f"Error: {e}")
             return None
+
+
+
+    def getCustomerData(self, customer_id: int) -> tuple:
+        try:
+            self.cursor.execute("""
+            SELECT name, surname, phoneNumber, email
+                FROM Customers
+                WHERE id = ?
+            """, (customer_id,))
+
+            customer_data = self.cursor.fetchone()
+            self.cursor.fetchone()
+
+            if not customer_data:
+                print("Error: Could not fetch customer data")
+                return
+            
+            return customer_data
+
+        except mariadb.Error as e:
+            print(f"Error: {e}")
+            return None
+
+
+
+    def getLastTicket(self) -> int:
+        try:
+            self.cursor.execute("SELECT id FROM Tickets ORDER BY id DESC LIMIT 1",)
+
+            (ticket,) = self.cursor.fetchone()
+            self.cursor.fetchall()
+            if not ticket:
+                return None
+            return ticket
+
+        except mariadb.Error as e:
+            print(f"Error: {e}")
+            return None
+
+
+
+    def manageTickets(self, action: str, **kwargs):
+        if action == "showall":
+            try:
+                self.cursor.execute("SELECT * FROM Tickets",)
+                
+                tickets = pd.DataFrame(columns=['id', 'customer_id', 'schedule_id', 'n_seats'])
+                for (id, customer, schedule, n_seats) in self.cursor.fetchall():
+                    row = pd.DataFrame({'id': id,
+                                        'customer_id': customer,
+                                        'schedule_id': schedule,
+                                        'n_seats': n_seats}, index=[0])
+                    tickets = pd.concat([tickets, row]).reset_index(drop=True)
+
+                print(tabulate(tickets, headers='keys', tablefmt='psql'))
+
+            except mariadb.Error as e:
+                print(f"Error: {e}")
+                return
+
+        elif action == "new":
+            try:
+                customer_id = kwargs.get("customer_id", 0)
+                schedule_id = kwargs.get("schedule_id", None)
+                n_seats = kwargs.get("n_seats", None)
+
+                if not all([customer_id, schedule_id, n_seats]):
+                    print("Error: Invalid data")
+                    return
+
+                # Add a new ticket to the database
+                self.cursor.execute("""
+                INSERT INTO Tickets(customer_id, schedule_id, n_seats)
+                    VALUES (?, ?, ?)
+                """, (customer_id, schedule_id, n_seats))
+
+                # Extract the ticket data from the database TODO: get all customer data
+                self.cursor.execute("""
+                SELECT t.customer_id, s.id, m.title, l.name, l.type, s.start_time, t.n_seats
+                    FROM Tickets AS t
+                        JOIN Schedule AS s ON t.schedule_id = s.id
+                        JOIN Movies AS m ON s.movie_id = m.id
+                        JOIN Languages AS l ON m.language_id = l.id
+                    WHERE t.id = (SELECT id FROM Tickets ORDER BY id DESC LIMIT 1)
+                """,)
+
+                ticket_data = self.cursor.fetchone()
+                self.cursor.fetchall()
+
+                if not ticket_data:
+                    print("Error: Could not fetch ticket data")
+                    return
+                    
+                (customer, schedule, m_title, l_name, l_type, start, seats) = ticket_data
+                (c_name, c_surname, c_phone, c_email) = self.getCustomerData(customer)
+
+                ticket = Ticket(id=self.getLastTicket(),
+                                customer={'Name': c_name,
+                                          'Surname': c_surname,
+                                          'Phone number': c_phone,
+                                          'Email': c_email},
+                                movie=f"{m_title} ({l_name} - {l_type})",
+                                start_time=start,
+                                n_seats=seats,
+                                seat_price=self.getPrice(schedule))
+                print(f"\n{ticket}\n")
+
+
+            except mariadb.Error as e:
+                print(f"Error: {e}")
+                return 
+
+        elif action == "cancel":
+            try:
+                id = kwargs.get("id", None)
+
+                if not id:
+                    print("Error: Invalid data")
+                    return
+
+                self.cursor.execute("DELETE FROM Tickets WHERE id = ?", (id,))
+
+            except mariadb.Error as e:
+                print(f"Error: {e}")
+                return 
+            
+        else:
+            print("Error: invalid value of 'action' - must be 'new' or 'cancel'")
+
 
     
     def close(self):
@@ -230,6 +404,10 @@ class CommandLine:
                                     - show : Displays all staff members
                                     - hire : Adds a new salesman to the staff
                                     - fire <username> : Removes a salesman from staff
+            - ticket <action> : Ticket mangement
+                                <action> parameter values:
+                                    - new : Adds a new ticket to the database
+                                    - cancel <ticket_no> : Cancels the ticket
             - exit : Exits the application
         """
 
@@ -268,12 +446,16 @@ class CommandLine:
             closeApplication(self.connector)
 
         if args[0] == "logOut":
+            self.connector.close()
             return True
 
-        if args[0] == "help":
+        if args[0] == "clear":
+            os.system('cls' if os.name == 'nt' else 'clear')
+
+        elif args[0] == "help":
             print(self.help)
 
-        elif args[0] == "staff":
+        elif args[0] == "staff": 
             if n_args < 2:
                 print("Error: Invalid arguments")
                 return
@@ -305,12 +487,44 @@ class CommandLine:
             else:
                 self.connector.displaySchedule(args[1])
 
+        elif args[0] == "price":
+            if n_args == 1:
+                print("Error: Invalid arguments")
+            else:
+                print(self.connector.getPrice(args[1]))
+
+        elif args[0] == "customer":
+            if n_args == 1:
+                print("Error: Invalid arguments")
+            else:
+                print(self.connector.getCustomerData(args[1]))
+
         elif args[0] == "ticket":
             if n_args == 1:
                 print("Error: Invalid arguments")
             else:
-                if args[1] == "new":
-                    pass
+                if args[1] == "showall":
+                    self.connector.manageTickets("showall")
+
+                elif args[1] == "new":
+                    # TODO: customer = getCustomer()
+                    schedule = input("schedule_id: ")
+                    seats = input("seats: ")
+
+                    if any([(not var or var == "cancel") for var in (schedule, seats)]):
+                        print()
+                        return False
+
+                    self.connector.manageTickets("new", customer_id=1,
+                                                        schedule_id=schedule,
+                                                        n_seats=seats)
+
+                elif args[1] == "cancel":
+                    if n_args == 2:
+                        print("Error: Invalid arguments")
+                    else:
+                        self.connector.manageTickets("cancel", id=args[2])
+
                 else:
                     print("Error: Invalid arguments")
 

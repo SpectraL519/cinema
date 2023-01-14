@@ -82,14 +82,8 @@ if __name__ == "__main__":
             while True:
                 logOut = cmd.execCommand()
                 if logOut: 
-                    connector = copy(init_connector)
-                    connector.open()
                     break
-
-            connector.close()
             connector = None
 
         else:
             print("Error: Database connection\nTry again!")
-
-
