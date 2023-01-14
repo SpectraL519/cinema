@@ -41,7 +41,11 @@ CREATE TABLE IF NOT EXISTS Customers (
     PRIMARY KEY(id)
 );
 
-ALTER TABLE Customers AUTO_INCREMENT = 0;
+ALTER TABLE Customers SET AUTO_INCREMENT = 0;
+```
+
+```
+INSERT INTO Customers(name, n_tickets) VALUES ('anonim', 0);
 ```
 
 * Languages
@@ -54,6 +58,14 @@ CREATE TABLE IF NOT EXISTS Languages (
 
     PRIMARY KEY(id)
 );
+```
+
+```
+INSERT INTO Languages(name, type) VALUES
+    ('Polish', 'Original'),
+    ('English', 'Subtitles'),
+    ('English', 'Voiceover'),
+    ('English', 'Dubbing');
 ```
 
 * Movies
@@ -134,24 +146,21 @@ CREATE TABLE IF NOT EXISTS Tickets (
 
 ### Adding procedures and triggers
 
-* Movie overlap checking ???
+* Movie overlap checking
 
 ```
 DELIMITER $$
 CREATE PROCEDURE IF NOT EXISTS checkMovieOverlap (movie INT, room INT, start DATETIME)
 BEGIN
     DECLARE overlap_count INT DEFAULT 0;
-    DECLARE movie_length INT DEFAULT 0;
 
-    SET movie_length = (SELECT length FROM Movies WHERE id = movie);
-
-    SELECT COUNT(s.id) 
-        FROM Schedule AS s JOIN Movies AS m ON s.movie_id = m.id
-        WHERE room_id = room
-            AND DATE(s.start_time) = DATE(start)
-            AND DATE_ADD(s.start_time, INTERVAL m.length MINUTE) BETWEEN
-                start AND DATE_ADD(s.start_time, INTERVAL movie_length MINUTE);
-        INTO overlap_count;
+    SET overlap_count = 
+        (SELECT COUNT(s.id)
+            FROM Schedule AS s JOIN Movies AS m ON s.movie_id = m.id
+            WHERE m.id IN (SELECT id FROM Movies WHERE title LIKE 'Avatar%') 
+                AND room_id = 11
+                AND NEW.start_time BETWEEN
+                    s.start_time AND DATE_ADD(s.start_time, INTERVAL m.length MINUTE));
 
     IF overlap_count > 0 THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Error: Movie overlap';
@@ -168,23 +177,20 @@ CREATE TRIGGER IF NOT EXISTS movieOverlapInsert
     FOR EACH ROW
 
     BEGIN
-        DECLARE overlap_count INT DEFAULT 0;
-        DECLARE movie_length INT DEFAULT 0;
+        CALL checkMovieOverlap(NEW.movie_id, NEW.room_id, NEW.start_time);
+    END$$
+DELIMITER ;
+```
 
-        SET movie_length = (SELECT length FROM Movies WHERE id = NEW.movie_id);
+```
+DELIMITER $$
+CREATE TRIGGER IF NOT EXISTS movieOverlapUpdate
+    BEFORE UPDATE
+    ON Schedule
+    FOR EACH ROW
 
-        SELECT COUNT(s.id) 
-            FROM Schedule AS s JOIN Movies AS m ON s.movie_id = m.id
-            WHERE id = NEW.id 
-                AND room_id = NEW.room_id
-                AND DATE(s.start_time) = DATE(NEW.start_time)
-                AND DATE_ADD(s.start_time, INTERVAL m.length MINUTE) 
-                    BETWEEN NEW.start_time AND DATE_ADD(s.start_time, INTERVAL movie_length MINUTE);
-            INTO overlap_count;
-
-        IF overlap_count > 0 THEN
-            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Error: Movie overlap';
-        END IF;
+    BEGIN
+        CALL checkMovieOverlap(NEW.movie_id, NEW.room_id, NEW.start_time);
     END$$
 DELIMITER ;
 ```
@@ -198,12 +204,16 @@ DELIMITER $$
 CREATE PROCEDURE IF NOT EXISTS updateTakenSeats (schedule_id INT, n_seats_old INT, n_seats_new INT)
 BEGIN
     DECLARE s_taken, s_max INT DEFAULT 0;
+    DECLARE s_taken_new INT DEFAULT 0;
+
     SET s_taken = (SELECT s_taken FROM Schedule WHERE id = schedule_id);
     SET s_max = (SELECT max_seats 
-                        FROM Schedule AS s JOIN Rooms AS r ON s.room_id = r.id
-                        WHERE s.id = schedule_id);
+                    FROM Schedule AS s JOIN Rooms AS r ON s.room_id = r.id
+                    WHERE s.id = schedule_id);
+
+    SET s_taken_new = s_taken - n_seats_old + n_seats_new;
     
-    IF s_taken - n_seats_old + n_seats_new > s_max THEN
+    IF s_taken_new < 0 OR s_taken_new > s_max THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Error: Seat number overflow';
     END IF;
 
@@ -275,10 +285,12 @@ FLUSH PRIVILEGES;
 ```
 CREATE USER IF NOT EXISTS 'salesman'@'localhost';
 SET PASSWORD FOR 'salesman'@'localhost' = PASSWORD(<password>);
-GRANT SELECT ON cinema.Movies TO 'salesman'@'localhost';
-GRANT SELECT ON cinema.Schedule TO 'salesman'@'localhost';
-GRANT SELECT, INSERT ON cinema.Customers TO 'salesman'@'localhost';
-GRANT SELECT, INSERT ON cinema.Tickets TO 'salesman'@'localhost';
+GRANT SELECT ON cinema.movies TO 'salesman'@'localhost';
+GRANT SELECT ON cinema.schedule TO 'salesman'@'localhost';
+GRANT SELECT ON cinema.languages TO 'salesman'@'localhost';
+GRANT SELECT ON cinema.rooms TO 'salesman'@'localhost';
+GRANT SELECT, INSERT ON cinema.customers TO 'salesman'@'localhost';
+GRANT SELECT, INSERT ON cinema.tickets TO 'salesman'@'localhost';
 FLUSH PRIVILEGES;
 ```
 
@@ -289,10 +301,12 @@ FLUSH PRIVILEGES;
 ```
 CREATE USER IF NOT EXISTS 'manager'@'localhost';
 SET PASSWORD FOR 'manager'@'localhost' = PASSWORD(<password>);
-GRANT SELECT, UPDATE, INSERT ON cinema.Staff ON 'manager'@'localhost';
-GRANT SELECT, UPDATE, INSERT ON cinema.Movies TO 'salesman'@'localhost';
-GRANT SELECT, UPDATE, INSERT ON cinema.Schedule TO 'salesman'@'localhost';
-GRANT SELECT, UPDATE, INSERT ON cinema.Customers TO 'salesman'@'localhost';
-GRANT SELECT, UPDATE, INSERT ON cinema.Tickets TO 'salesman'@'localhost';
+GRANT SELECT, UPDATE, INSERT, DELETE ON cinema.staff TO 'manager'@'localhost';
+GRANT SELECT, UPDATE, INSERT, DELETE ON cinema.languages TO 'manager'@'localhost';
+GRANT SELECT, UPDATE, INSERT, DELETE ON cinema.rooms TO 'manager'@'localhost';
+GRANT SELECT, UPDATE, INSERT, DELETE ON cinema.movies TO 'salesman'@'localhost';
+GRANT SELECT, UPDATE, INSERT, DELETE ON cinema.schedule TO 'salesman'@'localhost';
+GRANT SELECT, UPDATE, INSERT, DELETE ON cinema.customers TO 'salesman'@'localhost';
+GRANT SELECT, UPDATE, INSERT, DELETE ON cinema.tickets TO 'salesman'@'localhost';
 FLUSH PRIVILEGES;
 ```
