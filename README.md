@@ -48,4 +48,4 @@ python cinema.py
 
 * Entities diagram -> click [here](docs/entities.png)
 
-* SQL code -> click [here](docs/db_cinema.md)
+* SQL code -> click [here](docs/cinema_db.md)
