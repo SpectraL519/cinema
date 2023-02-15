@@ -16,7 +16,7 @@ class Credentials:
         user = kwargs.get("username", None)
         pswd = kwargs.get("password", None)
 
-        if checkInput(user) and checkInput(pswd):
+        if _check_input(user) and _check_input(pswd):
             self.username = user
             self.password = pswd
 
@@ -24,16 +24,9 @@ class Credentials:
     def __getattribute__(self, name: str):
         return object.__getattribute__(self, name)
 
-
-    def isNull(self) -> bool:
-        if not self.username or not self.password:
-            return True
-
-        return False
-
     
     def set(self, username: str, password: str) -> bool:
-        if checkInput(username) and checkInput(password):
+        if _check_input(username) and _check_input(password):
             self.username = username
             self.password = password
             return True
@@ -108,7 +101,7 @@ class DBConnector:
 
 
 
-    def getRole(self, credentials: Credentials) -> str:
+    def get_role(self, credentials: Credentials) -> str:
         try:
             self.cursor.execute(
                 "SELECT role FROM Staff WHERE username = ? AND pswd = PASSWORD(?)",
@@ -127,7 +120,7 @@ class DBConnector:
 
 
 
-    def manageStaff(self, action: str, **kwargs):
+    def manage_staff(self, action: str, **kwargs):
         if action == "show":
             try:
                 self.cursor.execute("SELECT username, role FROM Staff",)
@@ -138,7 +131,7 @@ class DBConnector:
                                         'role': role}, index=[0])
                     staff = pd.concat([staff, row]).reset_index(drop=True)
 
-                print(tabulate(staff, headers='keys', tablefmt='psql'))
+                print(tabulate(staff, headers='keys', tablefmt='rounded_outline'))
 
             except mariadb.Error as e:
                 print(f"Error: {e}")
@@ -156,7 +149,7 @@ class DBConnector:
                     VALUES(?, PASSWORD(?), 'salesman')
                 """, (credentials.username, credentials.password))
                 
-                self.manageStaff("show")
+                self.manage_staff("show")
 
             except mariadb.Error as e:
                 print(f"Error: {e}")
@@ -171,7 +164,7 @@ class DBConnector:
 
                 self.cursor.execute("DELETE FROM Staff WHERE username = ?", (user,))
                 
-                self.manageStaff("show")
+                self.manage_staff("show")
 
             except mariadb.Error as e:
                 print(f"Error: {e}")
@@ -184,7 +177,7 @@ class DBConnector:
 
 
 
-    def displayRepertoire(self, date: str):
+    def display_repertoire(self, date: str):
         try:
             self.cursor.execute("""
             SELECT DISTINCT(m.title)
@@ -198,14 +191,14 @@ class DBConnector:
                 row = pd.DataFrame({'title': title}, index=[0])
                 schedule = pd.concat([schedule, row]).reset_index(drop=True)
 
-            print(tabulate(schedule, headers='keys', tablefmt='psql'))
+            print(tabulate(schedule, headers='keys', tablefmt='rounded_outline'))
 
         except mariadb.Error as e:
             print(f"Error: {e}")
 
 
 
-    def displaySchedule(self, date: str):
+    def display_schedule(self, date: str):
         try:
             self.cursor.execute("""
             SELECT s.id, m.id, m.title, l.name, l.type, s.start_time, s.s_taken, r.s_max 
@@ -225,14 +218,14 @@ class DBConnector:
                                     'free_seats': s_max - s_taken}, index=[0])
                 schedule = pd.concat([schedule, row]).reset_index(drop=True)
 
-            print(tabulate(schedule, headers='keys', tablefmt='psql'))
+            print(tabulate(schedule, headers='keys', tablefmt='rounded_outline'))
 
         except mariadb.Error as e:
             print(f"Error: {e}")
 
 
 
-    def getPrice(self, schedule_id: int) -> int:
+    def get_price(self, schedule_id: int) -> int:
         try:
             self.cursor.execute("""
             SELECT r.ticket_price
@@ -252,7 +245,7 @@ class DBConnector:
 
 
 
-    def getCustomerData(self, customer_id: int) -> tuple:
+    def get_customer_data(self, customer_id: int) -> tuple:
         try:
             self.cursor.execute("""
             SELECT name, surname, phoneNumber, email
@@ -275,7 +268,7 @@ class DBConnector:
 
 
 
-    def getLastTicket(self) -> int:
+    def get_last_ticket(self) -> int:
         try:
             self.cursor.execute("SELECT id FROM Tickets ORDER BY id DESC LIMIT 1",)
 
@@ -291,7 +284,7 @@ class DBConnector:
 
 
 
-    def manageTickets(self, action: str, **kwargs):
+    def manage_tickets(self, action: str, **kwargs):
         if action == "showall":
             try:
                 self.cursor.execute("SELECT * FROM Tickets",)
@@ -304,7 +297,7 @@ class DBConnector:
                                         'n_seats': n_seats}, index=[0])
                     tickets = pd.concat([tickets, row]).reset_index(drop=True)
 
-                print(tabulate(tickets, headers='keys', tablefmt='psql'))
+                print(tabulate(tickets, headers='keys', tablefmt='rounded_outline'))
 
             except mariadb.Error as e:
                 print(f"Error: {e}")
@@ -344,9 +337,9 @@ class DBConnector:
                     return
                     
                 (customer, schedule, m_title, l_name, l_type, start, seats) = ticket_data
-                (c_name, c_surname, c_phone, c_email) = self.getCustomerData(customer)
+                (c_name, c_surname, c_phone, c_email) = self.get_customer_data(customer)
 
-                ticket = Ticket(id=self.getLastTicket(),
+                ticket = Ticket(id=self.get_last_ticket(),
                                 customer={'Name': c_name,
                                           'Surname': c_surname,
                                           'Phone number': c_phone,
@@ -354,7 +347,7 @@ class DBConnector:
                                 movie=f"{m_title} ({l_name} - {l_type})",
                                 start_time=start,
                                 n_seats=seats,
-                                seat_price=self.getPrice(schedule))
+                                seat_price=self.get_price(schedule))
                 print(f"\n{ticket}\n")
 
 
@@ -390,7 +383,7 @@ class DBConnector:
 
 
 
-class CommandLine:
+class Prompt:
     def __init__(self, connector: DBConnector):
         self.connector = connector
         self.help = """
@@ -406,6 +399,7 @@ class CommandLine:
                                     - fire <username> : Removes a salesman from staff
             - ticket <action> : Ticket mangement
                                 <action> parameter values:
+                                    - showall : Displays all current tickets
                                     - new : Adds a new ticket to the database
                                     - cancel <ticket_no> : Cancels the ticket
             - exit : Exits the application
@@ -416,12 +410,12 @@ class CommandLine:
         return object.__getattribute__(self, name)
 
 
-    def getCredentials(self) -> Credentials:
+    def get_credentials(self) -> Credentials:
         c = Credentials()
         while True:
             username = input("\nUsername: ")
             if username == "exit":
-                closeApplication(self.connector)
+                _close_application(self.connector)
 
             if username == "cancel":
                 return None
@@ -434,7 +428,7 @@ class CommandLine:
         return c
 
 
-    def execCommand(self) -> bool:
+    def exec(self) -> bool:
         command = input("cmd> ")
         args = re.split(" ", command)
         n_args = len(args)
@@ -443,7 +437,7 @@ class CommandLine:
             return False
             
         if args[0] == "exit":
-            closeApplication(self.connector)
+            _close_application(self.connector)
 
         if args[0] == "logOut":
             self.connector.close()
@@ -461,50 +455,50 @@ class CommandLine:
                 return
 
             if args[1] == "show":
-                self.connector.manageStaff("show")
+                self.connector.manage_staff("show")
 
             elif args[1] == "hire":
-                hire = self.getCredentials()
+                hire = self.get_credentials()
                 if hire:
-                    self.connector.manageStaff("hire", credentials=hire)
+                    self.connector.manage_staff("hire", credentials=hire)
 
             elif args[1] == "fire":
                 user = input("Username: ")
                 if not user or user == "cancel":
                     return False
 
-                self.connector.manageStaff("fire", username=user)
+                self.connector.manage_staff("fire", username=user)
 
         elif args[0] == "repertoire":
             if n_args == 1:
-                self.connector.displayRepertoire(datetime.today().strftime('%Y-%m-%d'))
+                self.connector.display_repertoire(datetime.today().strftime('%Y-%m-%d'))
             else:
-                self.connector.displayRepertoire(args[1])
+                self.connector.display_repertoire(args[1])
 
         elif args[0] == "schedule":
             if n_args == 1:
-                self.connector.displaySchedule(datetime.today().strftime('%Y-%m-%d'))
+                self.connector.display_schedule(datetime.today().strftime('%Y-%m-%d'))
             else:
-                self.connector.displaySchedule(args[1])
+                self.connector.display_schedule(args[1])
 
         elif args[0] == "price":
             if n_args == 1:
                 print("Error: Invalid arguments")
             else:
-                print(self.connector.getPrice(args[1]))
+                print(self.connector.get_price(args[1]))
 
         elif args[0] == "customer":
             if n_args == 1:
                 print("Error: Invalid arguments")
             else:
-                print(self.connector.getCustomerData(args[1]))
+                print(self.connector.get_customer_data(args[1]))
 
         elif args[0] == "ticket":
             if n_args == 1:
                 print("Error: Invalid arguments")
             else:
                 if args[1] == "showall":
-                    self.connector.manageTickets("showall")
+                    self.connector.manage_tickets("showall")
 
                 elif args[1] == "new":
                     # TODO: customer = getCustomer()
@@ -515,7 +509,7 @@ class CommandLine:
                         print()
                         return False
 
-                    self.connector.manageTickets("new", customer_id=1,
+                    self.connector.manage_tickets("new", customer_id=1,
                                                         schedule_id=schedule,
                                                         n_seats=seats)
 
@@ -523,7 +517,7 @@ class CommandLine:
                     if n_args == 2:
                         print("Error: Invalid arguments")
                     else:
-                        self.connector.manageTickets("cancel", id=args[2])
+                        self.connector.manage_tickets("cancel", id=args[2])
 
                 else:
                     print("Error: Invalid arguments")
@@ -539,7 +533,7 @@ class CommandLine:
 
 
 
-def checkInput(input: str) -> bool:
+def _check_input(input: str) -> bool:
     if not input or re.match(".*['\";, ]+.*", input):
         return False
 
@@ -547,7 +541,7 @@ def checkInput(input: str) -> bool:
 
 
 
-def closeApplication(connector: DBConnector):
+def _close_application(connector: DBConnector):
     if connector:
         connector.close()
     print("Bye!")

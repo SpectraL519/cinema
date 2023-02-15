@@ -1,5 +1,7 @@
 # Cinema application database setup
 
+The entire project can be found [here](https://github.com/SpectraL519/cinema)
+
 ### Creating the database
 
 ```
@@ -15,6 +17,10 @@ USE cinema;
 
 ### Creating tables
 
+![](entities.png)
+
+<br />
+
 * Staff
 
 ```
@@ -26,6 +32,8 @@ CREATE TABLE IF NOT EXISTS Staff (
     PRIMARY KEY(username)
 );
 ```
+
+<br />
 
 * Customers
 
@@ -48,6 +56,8 @@ ALTER TABLE Customers SET AUTO_INCREMENT = 0;
 INSERT INTO Customers(name, n_tickets) VALUES ('anonim', 0);
 ```
 
+<br />
+
 * Languages
 
 ```
@@ -62,11 +72,12 @@ CREATE TABLE IF NOT EXISTS Languages (
 
 ```
 INSERT INTO Languages(name, type) VALUES
-    ('Polish', 'Original'),
     ('English', 'Subtitles'),
     ('English', 'Voiceover'),
     ('English', 'Dubbing');
 ```
+
+<br />
 
 * Movies
 
@@ -85,6 +96,10 @@ CREATE TABLE IF NOT EXISTS Movies (
 );
 ```
 
+Data for the Movies table has been generated using a python helper script
+
+<br />
+
 * Rooms
 
 ```
@@ -96,6 +111,10 @@ CREATE TABLE IF NOT EXISTS Rooms (
     PRIMARY KEY(id)
 );
 ```
+
+Data for the Rooms table has been generated using a python helper script
+
+<br />
 
 * Schedule
 
@@ -118,6 +137,10 @@ CREATE TABLE IF NOT EXISTS Schedule (
         REFERENCES Rooms(id)
 );
 ```
+
+Data for the Schedule table has been generated using a python helper script
+
+<br />
 
 * Tickets
 

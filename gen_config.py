@@ -4,6 +4,7 @@ import yaml
 
 
 config = {
+    'init_user': 'init',
     'host': 'localhost',
     'port': 3306,
     'database': 'cinema',
