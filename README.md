@@ -34,10 +34,18 @@ python gen_config.py
 
 <br />
 <br />
-<br />
 
 ### Running the application
 
 ```
 python cinema.py
 ```
+
+<br />
+<br />
+
+### Database specifications
+
+* Entities diagram -> click [here](docs/entities.png)
+
+* SQL code -> click [here](docs/cinema_db.md)
